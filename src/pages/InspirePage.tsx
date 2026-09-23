@@ -8,7 +8,7 @@ import {
   formatTimestamp,
   getTimeOfDay,
 } from '@/utils/sceneHelpers'
-import { Lightbulb, RefreshCw, Quote, Bus, ArrowRight } from 'lucide-react'
+import { Lightbulb, RefreshCw, Quote, Bus, ArrowRight, ShieldAlert } from 'lucide-react'
 
 export default function InspirePage() {
   const { randomScene, refreshRandom, loadAll, scenes } = useSceneStore()
@@ -111,6 +111,11 @@ export default function InspirePage() {
                 <span className="text-mist-100 font-medium">{randomScene.routeName}</span>
                 <span className="text-mist-500">·</span>
                 <span>{randomScene.segment}</span>
+                {randomScene.verifyStatus === 'pending' && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-900/40 px-2 py-0.5 text-[10px] text-amber-300">
+                    <ShieldAlert className="w-3 h-3" />待核验
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <span>{getTimeOfDay(randomScene.timestamp)}</span>

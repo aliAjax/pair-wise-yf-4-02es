@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Route, X, Trash2, Clock, MapPin } from 'lucide-react'
+import { Search, Route, X, Trash2, Clock, MapPin, ShieldAlert, CheckCircle2 } from 'lucide-react'
 import { useSceneStore } from '@/store/useSceneStore'
 import {
   formatTimestamp,
@@ -11,9 +11,12 @@ import {
 import type { WindowScene } from '@/types'
 
 export default function TimelinePage() {
-  const { routeNames, selectedRoute, currentRouteScenes, selectRoute, loadAll, deleteScene } =
-    useSceneStore()
+  const {
+    routeNames, selectedRoute, currentRouteScenes, scenes, pendingScenes,
+    selectRoute, loadAll, deleteScene, verifyScene,
+  } = useSceneStore()
   const [search, setSearch] = useState('')
+  const [pendingOnly, setPendingOnly] = useState(false)
   const [detailScene, setDetailScene] = useState<WindowScene | null>(null)
 
   useEffect(() => {
@@ -24,13 +27,24 @@ export default function TimelinePage() {
     r.toLowerCase().includes(search.toLowerCase())
   )
 
-  const sorted = [...currentRouteScenes].sort(
+  const baseScenes = pendingOnly
+    ? scenes.filter((s) => s.verifyStatus === 'pending')
+    : currentRouteScenes
+
+  const sorted = [...baseScenes].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   )
 
+  // 弹窗里的记录可能已被核验，用 store 中的最新数据回填
+  const detail = detailScene ? scenes.find((s) => s.id === detailScene.id) ?? null : null
+
   const handleDelete = (id: string) => {
-    deleteScene(id)
-    setDetailScene(null)
+    const removed = deleteScene(id)
+    if (removed) setDetailScene(null)
+  }
+
+  const handleVerify = (id: string) => {
+    verifyScene(id)
   }
 
   return (
@@ -53,19 +67,30 @@ export default function TimelinePage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => selectRoute('')}
+              onClick={() => { selectRoute(''); setPendingOnly(false) }}
               className={`rounded-full px-3.5 py-1.5 text-xs transition-colors ${
-                !selectedRoute
+                !selectedRoute && !pendingOnly
                   ? 'bg-dusk-400 text-teal-950'
                   : 'bg-teal-900 text-mist-300 hover:bg-teal-800'
               }`}
             >
               全部
             </button>
-            {filteredRoutes.map((name) => (
+            <button
+              onClick={() => { selectRoute(''); setPendingOnly(true) }}
+              className={`flex items-center gap-1 rounded-full px-3.5 py-1.5 text-xs transition-colors ${
+                pendingOnly
+                  ? 'bg-amber-500 text-teal-950'
+                  : 'bg-teal-900 text-amber-300/80 hover:bg-teal-800'
+              }`}
+            >
+              <ShieldAlert className="w-3 h-3" />
+              待核验{pendingScenes.length > 0 ? ` ${pendingScenes.length}` : ''}
+            </button>
+            {!pendingOnly && filteredRoutes.map((name) => (
               <button
                 key={name}
-                onClick={() => selectRoute(name)}
+                onClick={() => { setPendingOnly(false); selectRoute(name) }}
                 className={`rounded-full px-3.5 py-1.5 text-xs transition-colors ${
                   selectedRoute === name
                     ? 'bg-dusk-400 text-teal-950'
@@ -83,7 +108,11 @@ export default function TimelinePage() {
           <div className="flex flex-col items-center justify-center py-24 text-mist-400">
             <div className="mb-4 text-6xl opacity-30">🪟</div>
             <p className="text-lg">
-              {selectedRoute ? '该路线暂无窗景记录' : '选择一条路线，开始浏览窗景'}
+              {pendingOnly
+                ? '没有待核验的窗景记录'
+                : selectedRoute
+                  ? '该路线暂无窗景记录'
+                  : '选择一条路线，开始浏览窗景'}
             </p>
           </div>
         ) : (
@@ -92,7 +121,7 @@ export default function TimelinePage() {
             <div className="space-y-6">
               {sorted.map((scene) => (
                 <div key={scene.id} className="relative flex gap-4">
-                  <div className="absolute -left-5 top-1 h-2.5 w-2.5 rounded-full bg-dusk-400 ring-4 ring-teal-950" />
+                  <div className={`absolute -left-5 top-1 h-2.5 w-2.5 rounded-full ring-4 ring-teal-950 ${scene.verifyStatus === 'pending' ? 'bg-amber-400' : 'bg-dusk-400'}`} />
                   <div className="w-20 shrink-0 pt-0.5 text-right">
                     <p className="text-xs text-dusk-400">
                       {formatTimestamp(scene.timestamp)}
@@ -110,6 +139,11 @@ export default function TimelinePage() {
                       <span className="text-sm font-semibold text-mist-100">
                         {scene.segment}
                       </span>
+                      {scene.verifyStatus === 'pending' && (
+                        <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-900/40 px-2 py-0.5 text-[10px] text-amber-300">
+                          <ShieldAlert className="w-3 h-3" />待核验
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 mb-1.5 text-mist-400">
                       <MapPin className="w-3 h-3" />
@@ -139,7 +173,7 @@ export default function TimelinePage() {
         )}
       </div>
 
-      {detailScene && (
+      {detail && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
           onClick={() => setDetailScene(null)}
@@ -156,48 +190,75 @@ export default function TimelinePage() {
             </button>
 
             <div className="mb-4 flex items-center gap-3">
-              {getWeatherIcon(detailScene.weather)}
-              <h2 className="text-xl font-bold text-dusk-400">{detailScene.segment}</h2>
+              {getWeatherIcon(detail.weather)}
+              <h2 className="text-xl font-bold text-dusk-400">{detail.segment}</h2>
             </div>
+
+            {detail.verifyStatus === 'pending' && (
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-900/50 bg-amber-950/30 px-3 py-2.5 text-xs text-amber-300">
+                <ShieldAlert className="mt-0.5 w-4 h-4 shrink-0" />
+                <span>
+                  线路档案站序改写后，该记录引用的区间不再相邻同向，转入待核验。
+                  确认实际区间无误后请核验通过；核验通过前该记录不得移除。
+                </span>
+              </div>
+            )}
 
             <div className="space-y-3 text-sm">
               <div className="flex items-center gap-2 text-mist-300">
                 <MapPin className="w-4 h-4 text-dusk-400" />
-                <span>{detailScene.routeName}</span>
+                <span>{detail.routeName}</span>
                 <span className="text-teal-600">·</span>
-                <span>{detailScene.seatDirection}侧</span>
+                <span>{detail.seatDirection}侧</span>
               </div>
               <div className="flex items-center gap-2 text-mist-300">
                 <Clock className="w-4 h-4 text-dusk-400" />
-                <span>{formatTimestamp(detailScene.timestamp)}</span>
+                <span>{formatTimestamp(detail.timestamp)}</span>
                 <span className="text-teal-600">·</span>
-                <span>{getTimeOfDay(detailScene.timestamp)}</span>
+                <span>{getTimeOfDay(detail.timestamp)}</span>
               </div>
               <div className="flex items-center gap-3 text-mist-300">
-                {getTreeIcon(detailScene.treeDensity)}
-                <span>{detailScene.treeDensity}</span>
-                {getPedestrianIcon(detailScene.pedestrianStatus)}
-                <span>{detailScene.pedestrianStatus}</span>
+                {getTreeIcon(detail.treeDensity)}
+                <span>{detail.treeDensity}</span>
+                {getPedestrianIcon(detail.pedestrianStatus)}
+                <span>{detail.pedestrianStatus}</span>
               </div>
-              {detailScene.signText && (
+              {detail.signText && (
                 <div className="rounded-lg bg-teal-800/50 px-3 py-2 text-mist-200">
-                  招牌: {detailScene.signText}
+                  招牌: {detail.signText}
                 </div>
               )}
-              {detailScene.note && (
+              {detail.note && (
                 <div className="rounded-lg border border-teal-800 px-3 py-2 text-mist-300">
-                  {detailScene.note}
+                  {detail.note}
                 </div>
               )}
             </div>
 
-            <button
-              onClick={() => handleDelete(detailScene.id)}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-red-900/40 py-2.5 text-sm text-red-300 transition-colors hover:bg-red-900/60"
-            >
-              <Trash2 className="w-4 h-4" />
-              删除此窗景
-            </button>
+            <div className="mt-5 space-y-2">
+              {detail.verifyStatus === 'pending' && (
+                <button
+                  onClick={() => handleVerify(detail.id)}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-dusk-400 py-2.5 text-sm font-medium text-teal-950 transition-colors hover:bg-dusk-300"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  核验通过
+                </button>
+              )}
+              <button
+                onClick={() => handleDelete(detail.id)}
+                disabled={detail.verifyStatus === 'pending'}
+                title={detail.verifyStatus === 'pending' ? '待核验记录不得移除' : undefined}
+                className={`flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm transition-colors ${
+                  detail.verifyStatus === 'pending'
+                    ? 'cursor-not-allowed bg-teal-800/40 text-mist-600'
+                    : 'bg-red-900/40 text-red-300 hover:bg-red-900/60'
+                }`}
+              >
+                <Trash2 className="w-4 h-4" />
+                {detail.verifyStatus === 'pending' ? '待核验中，不得移除' : '删除此窗景'}
+              </button>
+            </div>
           </div>
         </div>
       )}

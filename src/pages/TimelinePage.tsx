@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Route, X, Trash2, Clock, MapPin } from 'lucide-react'
+import { Search, Route, X, Trash2, Clock, MapPin, ShieldAlert } from 'lucide-react'
 import { useSceneStore } from '@/store/useSceneStore'
 import {
   formatTimestamp,
@@ -8,6 +8,7 @@ import {
   getTreeIcon,
   getPedestrianIcon,
 } from '@/utils/sceneHelpers'
+import { getSceneSegment } from '@/utils/segmentRules'
 import type { WindowScene } from '@/types'
 
 export default function TimelinePage() {
@@ -15,6 +16,7 @@ export default function TimelinePage() {
     useSceneStore()
   const [search, setSearch] = useState('')
   const [detailScene, setDetailScene] = useState<WindowScene | null>(null)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     loadAll()
@@ -29,7 +31,12 @@ export default function TimelinePage() {
   )
 
   const handleDelete = (id: string) => {
-    deleteScene(id)
+    const result = deleteScene(id)
+    if (result.ok === false) {
+      setDeleteError(result.error)
+      return
+    }
+    setDeleteError('')
     setDetailScene(null)
   }
 
@@ -108,8 +115,13 @@ export default function TimelinePage() {
                     <div className="flex items-center gap-2 mb-2">
                       {getWeatherIcon(scene.weather)}
                       <span className="text-sm font-semibold text-mist-100">
-                        {scene.segment}
+                        {getSceneSegment(scene)}
                       </span>
+                      {scene.status === '待核验' && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300">
+                          <ShieldAlert className="w-3 h-3" />待核验
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 mb-1.5 text-mist-400">
                       <MapPin className="w-3 h-3" />
@@ -157,7 +169,12 @@ export default function TimelinePage() {
 
             <div className="mb-4 flex items-center gap-3">
               {getWeatherIcon(detailScene.weather)}
-              <h2 className="text-xl font-bold text-dusk-400">{detailScene.segment}</h2>
+              <h2 className="text-xl font-bold text-dusk-400">{getSceneSegment(detailScene)}</h2>
+              {detailScene.status === '待核验' && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs text-amber-300">
+                  <ShieldAlert className="w-3.5 h-3.5" />待核验
+                </span>
+              )}
             </div>
 
             <div className="space-y-3 text-sm">
@@ -191,12 +208,26 @@ export default function TimelinePage() {
               )}
             </div>
 
+            {detailScene.status === '待核验' && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                该区间在档案站序改写后已失效，请前往「档案」页核验；核验通过前记录不能移除。
+              </div>
+            )}
+            {deleteError && (
+              <p className="text-sm text-red-300">{deleteError}</p>
+            )}
+
             <button
               onClick={() => handleDelete(detailScene.id)}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-red-900/40 py-2.5 text-sm text-red-300 transition-colors hover:bg-red-900/60"
+              disabled={detailScene.status === '待核验'}
+              className={`mt-5 flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm transition-colors ${
+                detailScene.status === '待核验'
+                  ? 'cursor-not-allowed bg-teal-800/40 text-mist-500'
+                  : 'bg-red-900/40 text-red-300 hover:bg-red-900/60'
+              }`}
             >
               <Trash2 className="w-4 h-4" />
-              删除此窗景
+              {detailScene.status === '待核验' ? '待核验记录不得移除' : '删除此窗景'}
             </button>
           </div>
         </div>

@@ -1,8 +1,9 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { PenLine, Clock, Lightbulb, Bus } from 'lucide-react'
+import { PenLine, Waypoints, Clock, Lightbulb, Bus } from 'lucide-react'
 
 const navItems = [
   { to: '/', icon: PenLine, label: '记录' },
+  { to: '/archives', icon: Waypoints, label: '档案' },
   { to: '/timeline', icon: Clock, label: '时间线' },
   { to: '/inspire', icon: Lightbulb, label: '灵感' },
 ]
